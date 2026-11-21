@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="BioInkSim: A Biochemical and Rheological Simulator for Polymer-Based Tissue Engineering and 3D Bioprinting">
+    <title>BioInkSim | Biochemical & Rheological Simulator for 3D Bioprinting</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <header role="banner">
+        <div class="brand-container">
+            <div class="brand-logo" aria-hidden="true">B</div>
+            <div class="brand-title">
+                <h1>BioInkSim <span style="font-size: 12px; color: var(--accent-cyan); font-weight: 500;">v2.5</span></h1>
+                <p>Biochemical, Rheological & Mechanobiological 3D Bioprinting Simulator</p>
+            </div>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-outline" id="btnExportPreset" onclick="exportPreset()" title="Save current parameters to JSON file">
+                💾 Save Preset
+            </button>
+            <label class="btn btn-outline" style="margin: 0; cursor: pointer;" title="Load parameters from JSON file">
+                📂 Load Preset
+                <input type="file" id="presetFileInput" accept=".json" style="display: none;" onchange="importPreset(event)">
+            </label>
+            <button class="btn btn-outline" id="btnPinComparison" onclick="pinForComparison()" title="Pin current formulation for comparison">
+                📌 Pin for Diff
+            </button>
+            <button class="btn btn-primary" id="btnDownloadPdf" onclick="downloadPdfReport()" title="Download official 2-page PDF laboratory report">
+                📥 Download PDF Report
+            </button>
+            <button class="btn btn-accent" id="btnPrintReport" onclick="generateLabReport()" title="View printable HTML report in browser">
+                📄 View HTML
+            </button>
+        </div>
+    </header>
+
+    <div class="main-layout">
+        <!-- SIDEBAR CONTROLS -->
+        <aside class="sidebar" role="region" aria-label="Simulation Controls">
+            <!-- PRESETS -->
+            <div class="sidebar-section">
+                <div class="sidebar-title">
+                    <span>Clinical Tissue Target</span>
+                    <span style="font-size: 10px; color: var(--text-muted);">PRESETS</span>
+                </div>
+                <div class="form-group">
+                    <select id="selTissue" onchange="onTissueChange()" aria-label="Select Target Tissue">
+                        <option value="Cartilage">Articular Cartilage</option>
+                        <option value="Bone">Trabecular / Cortical Bone</option>
+                        <option value="Skin">Dermis / Skin Construct</option>
+                        <option value="Muscle">Skeletal / Cardiac Muscle</option>
+                        <option value="Blood vessel">Vascular Conduit / Vessel</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- BIOINK FORMULATION -->
+            <div class="sidebar-section">
+                <div class="sidebar-title">
+                    <span>1. Bioink Chemistry</span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="selPolymer">Polymer Matrix</label>
+                    <select id="selPolymer" onchange="onPolymerChange()">
+                        <option value="Alginate">Sodium Alginate</option>
+                        <option value="Gelatin">Gelatin (Type A)</option>
+                        <option value="GelMA">GelMA (Gelatin Methacryloyl)</option>
+                        <option value="Collagen">Collagen Type I</option>
+                        <option value="Chitosan">Chitosan</option>
+                        <option value="Hyaluronic Acid">Hyaluronic Acid (HA)</option>
+                        <option value="Alginate-Gelatin Blend">Alginate-Gelatin Blend</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <div class="form-label">
+                        <label for="rangeConc">Concentration (c)</label>
+                        <span class="form-val" id="concVal">3.0 %</span>
+                    </div>
+                    <input type="range" id="rangeConc" min="0.5" max="15.0" step="0.1" value="3.0"
+                           oninput="updateVal('concVal', this.value + ' %'); scheduleSimulation();">
+                </div>
+                <div class="form-group">
+                    <div class="form-label">
+                        <label for="rangeMw">Molecular Weight (Mw)</label>
+                        <span class="form-val" id="mwVal">180 kDa</span>
+                    </div>
+                    <input type="range" id="rangeMw" min="20" max="1000" step="10" value="180"
+                           oninput="updateVal('mwVal', this.value + ' kDa'); scheduleSimulation();">
+                </div>
+                <div class="form-group">
+                    <div class="form-label">
+                        <label for="rangeTemp">Temperature (T)</label>
+                        <span class="form-val" id="tempVal">25 °C</span>
+                    </div>
+                    <input type="range" id="rangeTemp" min="15" max="42" step="1" value="25"
+                           oninput="updateVal('tempVal', this.value + ' °C'); scheduleSimulation();">
+                </div>
+                <div class="form-group">
+                    <div class="form-label">
+                        <label for="rangePh">Physiological pH</label>
+                        <span class="form-val" id="phVal">7.4</span>
+                    </div>
+                    <input type="range" id="rangePh" min="4.0" max="9.0" step="0.1" value="7.4"
+                           oninput="updateVal('phVal', this.value); scheduleSimulation();">
+                </div>
+            </div>
+
+            <!-- CELL LINE & SIGNALING -->
+            <div class="sidebar-section">
+                <div class="sidebar-title">
+                    <span>2. Cellular Payload</span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="selCell">Encapsulated Cell Line</label>
+                    <select id="selCell" onchange="scheduleSimulation()">
+                        <option value="Chondrocytes">Articular Chondrocytes</option>
+                        <option value="Osteoblasts">Primary Osteoblasts</option>
+                        <option value="Fibroblasts">Dermal Fibroblasts</option>
+                        <option value="Stem Cells">Mesenchymal Stem Cells (hMSCs)</option>
+                        <option value="Endothelial Cells">Endothelial Cells (HUVECs)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <div class="form-label">
+                        <label for="rangeCellDensity">Cell Density</label>
+                        <span class="form-val" id="densityVal">5.0 x 10⁶/mL</span>
+                    </div>
+                    <input type="range" id="rangeCellDensity" min="0.5" max="25.0" step="0.5" value="5.0"
+                           oninput="updateVal('densityVal', this.value + ' x 10⁶/mL'); scheduleSimulation();">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="selGF">Signaling Cytokine / GF</label>
+                    <select id="selGF" onchange="scheduleSimulation()">
+                        <option value="TGF-β">TGF-β (Cartilage / Sox9)</option>
+                        <option value="BMP-2">BMP-2 (Bone / Runx2)</option>
+                        <option value="VEGF">VEGF (Vasculogenesis)</option>
+                        <option value="FGF">FGF-2 (Dermal / Fibroblast)</option>
+                        <option value="None / Control">Basal Control Medium</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- CROSSLINKING KINETICS -->
+            <div class="sidebar-section">
+                <div class="sidebar-title">
+                    <span>3. Crosslinking Kinetics</span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="selCrosslinker">Crosslinker System</label>
+                    <select id="selCrosslinker" onchange="onCrosslinkerChange()">
+                        <option value="CaCl2">CaCl2 (Ionic Chelation)</option>
+                        <option value="LAP + 405nm">LAP + 405nm Light (Radical Photo)</option>
+                        <option value="Thermal Gelation">Thermal Physical Assembly</option>
+                        <option value="mTG">mTG (Enzymatic Isopeptide)</option>
+                        <option value="Genipin">Genipin (Covalent Bi-functional)</option>
+                    </select>
+                </div>
+                <div class="form-group" id="groupCrossConc">
+                    <div class="form-label">
+                        <label for="rangeCrossConc" id="labelCrossConc">Crosslinker Conc</label>
+                        <span class="form-val" id="crossConcVal">50 mM</span>
+                    </div>
+                    <input type="range" id="rangeCrossConc" min="5" max="200" step="5" value="50"
+                           oninput="updateVal('crossConcVal', this.value + ' mM'); scheduleSimulation();">
+                </div>
+                <div class="form-group">
+                    <div class="form-label">
+                        <label for="rangeCrossTime">Exposure Time (t)</label>
+                        <span class="form-val" id="crossTimeVal">10 min</span>
+                    </div>
+                    <input type="range" id="rangeCrossTime" min="0.2" max="60" step="0.2" value="10"
+                           oninput="updateVal('crossTimeVal', this.value + ' min'); scheduleSimulation();">
+                </div>
+            </div>
+
+            <!-- EXTRUSION HARDWARE -->
+            <div class="sidebar-section">
+                <div class="sidebar-title">
+                    <span>4. Extrusion Hardware</span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="selNozzle">Needle Gauge</label>
+                    <select id="selNozzle" onchange="scheduleSimulation()">
+                        <option value="18G">18G (0.838 mm)</option>
+                        <option value="20G">20G (0.603 mm)</option>
+                        <option value="21G" selected>21G (0.514 mm)</option>
+                        <option value="22G">22G (0.413 mm)</option>
+                        <option value="23G">23G (0.337 mm)</option>
+                        <option value="25G">25G (0.260 mm)</option>
+                        <option value="27G">27G (0.210 mm)</option>
+                        <option value="30G">30G (0.159 mm)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="selNozzleType">Nozzle Geometry</label>
+                    <select id="selNozzleType" onchange="scheduleSimulation()">
+                        <option value="Cylindrical (Blunt)">Cylindrical (Blunt Steel)</option>
+                        <option value="Conical (Tapered)">Conical (Tapered Plastic)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <div class="form-label">
+                        <label for="rangePressure">Extrusion Pressure (ΔP)</label>
+                        <span class="form-val" id="pressVal">150 kPa</span>
+                    </div>
+                    <input type="range" id="rangePressure" min="10" max="400" step="5" value="150"
+                           oninput="updateVal('pressVal', this.value + ' kPa'); scheduleSimulation();">
+                </div>
+                <div class="form-group">
+                    <div class="form-label">
+                        <label for="rangeSyringeVol">Syringe Volume</label>
+                        <span class="form-val" id="syringeVal">5 mL</span>
+                    </div>
+                    <input type="range" id="rangeSyringeVol" min="1" max="20" step="1" value="5"
+                           oninput="updateVal('syringeVal', this.value + ' mL'); scheduleSimulation();">
+                </div>
+            </div>
+
+            <!-- 3D PRINTING ARCHITECTURE -->
+            <div class="sidebar-section">
+                <div class="sidebar-title">
+                    <span>5. Scaffold Architecture</span>
+                </div>
+                <div class="form-group">
+                    <div class="form-label">
+                        <label for="rangeLayer">Layer Height (h)</label>
+                        <span class="form-val" id="layerVal">250 μm</span>
+                    </div>
+                    <input type="range" id="rangeLayer" min="100" max="800" step="25" value="250"
+                           oninput="updateVal('layerVal', this.value + ' μm'); scheduleSimulation();">
+                </div>
+                <div class="form-group">
+                    <div class="form-label">
+                        <label for="rangeSpacing">Strand Spacing (s)</label>
+                        <span class="form-val" id="spacingVal">1000 μm</span>
+                    </div>
+                    <input type="range" id="rangeSpacing" min="500" max="2500" step="50" value="1000"
+                           oninput="updateVal('spacingVal', this.value + ' μm'); scheduleSimulation();">
+                </div>
+            </div>
+        </aside>
+
+        <!-- MAIN WORKSPACE -->
+        <main class="workspace" role="main">
+            <!-- DIAGNOSTICS CONTAINER -->
+            <div id="diagnosticsContainer" aria-live="polite"></div>
+
+            <!-- NAVIGATION TABS -->
+            <div class="nav-tabs" role="tablist">
+                <button class="tab-btn active" role="tab" id="btnTabDashboard" onclick="switchTab('tabDashboard')">📊 Live Simulator</button>
+                <button class="tab-btn" role="tab" id="btnTabScaffold" onclick="switchTab('tabScaffold')">🧱 3D Viewport</button>
+                <button class="tab-btn" role="tab" id="btnTabCalibration" onclick="switchTab('tabCalibration')">🔬 Rheology Calibration</button>
+                <button class="tab-btn" role="tab" id="btnTabUQ" onclick="switchTab('tabUQ')">🎯 UQ & Sensitivity</button>
+                <button class="tab-btn" role="tab" id="btnTabComparison" onclick="switchTab('tabComparison')">⚖️ Side-by-Side Diff</button>
+                <button class="tab-btn" role="tab" id="btnTabBenchmarks" onclick="switchTab('tabBenchmarks')">📚 Benchmark Parity</button>
+                <button class="tab-btn" role="tab" id="btnTabInverse" onclick="switchTab('tabInverse')">🤖 Inverse Design AI</button>
+            </div>
+
+            <!-- TAB 1: DASHBOARD -->
+            <div id="tabDashboard" class="tab-content">
+                <!-- COMPOSITE SCORE BANNER -->
+                <div class="score-banner">
+                    <div class="score-circle">
+                        <div class="score-badge" id="badgeScore">
+                            84
+                            <span>/ 100</span>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent-cyan); font-weight: 700;">
+                                Multi-Criteria Tissue Suitability Score
+                            </div>
+                            <div style="font-size: 16px; font-weight: 700; color: #fff; margin-top: 2px;" id="textVerdict">
+                                Loading Simulation...
+                            </div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;" id="textTargetTissueSub">
+                                Articular Cartilage Target Benchmark
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 14px; flex-wrap: wrap;">
+                        <div style="text-align: right;">
+                            <div style="font-size: 10px; color: var(--text-muted);">FLOW REGIME</div>
+                            <div style="font-size: 13px; font-weight: 700; color: var(--accent-emerald);" id="metricRegime">Shear-Thinning</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 10px; color: var(--text-muted);">SAFETY RATING</div>
+                            <div style="font-size: 13px; font-weight: 700; color: var(--accent-emerald);" id="metricSafetyRating">Low Stress / Safe</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 10px; color: var(--text-muted);">GEL STATE</div>
+                            <div style="font-size: 13px; font-weight: 700; color: var(--accent-cyan);" id="metricGelState">Optimal Hydrogel</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CARDS GRID -->
+                <div class="cards-grid" style="margin-top: 18px;">
+                    <!-- RHEOLOGY CARD -->
+                    <div class="stat-card">
+                        <div class="stat-card-header">
+                            <span class="stat-card-title">🌊 Ostwald–de Waele Flow</span>
+                            <span class="stat-pill pill-blue" id="pillRheo">n &lt; 1.0</span>
+                        </div>
+                        <div class="stat-main-metric">
+                            <span id="metricK">4.20</span>
+                            <span class="stat-unit">Pa·sⁿ</span>
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+                            Flow Index <strong>n = <span id="metricN" style="color: #fff;">0.52</span></strong> | Yield Stress <strong><span id="metricYield" style="color: #fff;">1.8</span> Pa</strong>
+                        </div>
+                        <div class="stat-desc" id="descRheo">Viscosity decreases under shear.</div>
+                        <div class="chart-container">
+                            <canvas id="canvasRheo" width="400" height="180" aria-label="Viscosity vs Shear Rate Chart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- EXTRUSION MECHANICS CARD (WITH BAGLEY) -->
+                    <div class="stat-card">
+                        <div class="stat-card-header">
+                            <span class="stat-card-title">⚙️ Extrusion & Bagley Loss</span>
+                            <span class="stat-pill pill-green" id="pillFlowStatus">Active Flow</span>
+                        </div>
+                        <div class="stat-main-metric">
+                            <span id="metricTauW">1414.6</span>
+                            <span class="stat-unit">Pa</span>
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+                            Flow Rate <strong><span id="metricQ" style="color: #fff;">0.167</span> mm³/s</strong> | Velocity <strong><span id="metricV" style="color: #fff;">8.05</span> mm/s</strong>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+                            Entrance Loss (Bagley): <strong><span id="metricEntranceLoss" style="color: var(--accent-amber);">10.2</span> kPa</strong> | Plunger Speed: <strong><span id="metricPlungerSpeed">0.07</span> mm/s</strong>
+                        </div>
+                        <div class="stat-desc" id="descExtrusion">Capillary shear calculated via exact Bagley end correction.</div>
+                    </div>
+
+                    <!-- CELL VIABILITY & 72H APOPTOSIS CARD -->
+                    <div class="stat-card">
+                        <div class="stat-card-header">
+                            <span class="stat-card-title">🧬 Immediate Viability</span>
+                            <span class="stat-pill pill-green" id="pillViability">Safe</span>
+                        </div>
+                        <div class="stat-main-metric">
+                            <span id="metricViability">96.8</span>
+                            <span class="stat-unit">%</span>
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+                            Shear Dose: <strong><span id="metricDose" style="color: #fff;">0.082</span></strong> | Residence Time: <strong><span id="metricTres" style="color: #fff;">1.58</span> ms</strong>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="canvasApoptosis" width="400" height="150" aria-label="72-Hour Post-Print Viability Curve"></canvas>
+                        </div>
+                        <div class="callout-box" style="margin-top: 10px; font-size: 11px;">
+                            <strong>Biophysical Note:</strong> Predictions use a Leverett–Nevaril erythrocyte-derived dose law extended to nucleated cells with per-lineage τ_crit estimates. Excludes 24–72 h apoptotic loss shown above.
+                        </div>
+                    </div>
+
+                    <!-- 3D SCAFFOLD ARCHITECTURE CARD -->
+                    <div class="stat-card">
+                        <div class="stat-card-header">
+                            <span class="stat-card-title">📐 Scaffold & Printability</span>
+                            <span class="stat-pill pill-green" id="pillPr">Pr ~ 1.0</span>
+                        </div>
+                        <div class="stat-main-metric">
+                            <span id="metricPr">0.98</span>
+                            <span class="stat-unit">Pr (Ouyang)</span>
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+                            Porosity: <strong><span id="metricPorosity" style="color: #fff;">68.4</span> %</strong> | Pore Width: <strong><span id="metricPoreWidth" style="color: #fff;">422</span> μm</strong>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+                            Strand Diam: <strong><span id="metricStrandDiam">578</span> μm</strong> | Intercell Spacing: <strong><span id="metricCellSpacing">58.5</span> μm</strong>
+                        </div>
+                        <div class="stat-desc" id="descPr">Calculated using square-pore geometric circularity equation.</div>
+                    </div>
+
+                    <!-- CROSSLINKING & HYDROGEL MODULUS CARD -->
+                    <div class="stat-card">
+                        <div class="stat-card-header">
+                            <span class="stat-card-title">🔗 Elastic Young's Modulus</span>
+                            <span class="stat-pill pill-blue" id="pillGelState">Crosslinked</span>
+                        </div>
+                        <div class="stat-main-metric">
+                            <span id="metricE">143.5</span>
+                            <span class="stat-unit">kPa (E)</span>
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+                            Degree: <strong><span id="metricDegree" style="color: #fff;">59.6</span> %</strong> | Gel Point χ_c: <strong><span id="metricChiC" style="color: #fff;">12</span> %</strong>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+                            Storage Modulus G': <strong><span id="metricGPrime">47.8</span> kPa</strong> | Concentration Scale (c^1.7): <strong><span id="metricConcScale">1.00x</span></strong>
+                        </div>
+                        <div class="stat-desc">Affine rubber network elasticity with percolation gel point.</div>
+                    </div>
+
+                    <!-- DEGRADATION & SWELLING CARD -->
+                    <div class="stat-card">
+                        <div class="stat-card-header">
+                            <span class="stat-card-title">⏳ Degradation & Swelling</span>
+                            <span class="stat-pill pill-amber">56-Day Kinetic</span>
+                        </div>
+                        <div class="stat-main-metric">
+                            <span id="metricHalfLife">64.2</span>
+                            <span class="stat-unit">Days (t½)</span>
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+                            Equilibrium Swelling: <strong><span id="metricSwelling" style="color: #fff;">436</span> %</strong> | k_deg: <strong><span id="metricKDeg">0.0108</span> /day</strong>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="canvasDegradation" width="400" height="150" aria-label="Scaffold Degradation and Swelling Chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: 3D VIEWPORT -->
+            <div id="tabScaffold" class="tab-content" style="display: none;">
+                <div class="stat-card">
+                    <div class="stat-card-header">
+                        <span class="stat-card-title">🧱 3D Micro-Architectural Scaffold & Cellular Viewport</span>
+                        <span class="stat-pill pill-blue">Interactive Orthogonal Lattice</span>
+                    </div>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+                        Interactive 3D model of orthogonal 0°/90° cross-hatched bioprinted construct.
+                        Green spheres represent viable cells (<span id="vpLiveCount">194</span>/200); red spheres indicate hydrodynamic membrane rupture / lysis (<span id="vpDeadCount">6</span>/200).
+                    </p>
+                    <div style="background: #080c14; border: 1px solid var(--border-color); border-radius: var(--radius-sm); position: relative; overflow: hidden;">
+                        <canvas id="viewport3D" width="800" height="420" style="cursor: grab;" aria-label="3D Bioprinted Scaffold Visualizer"></canvas>
+                        <div style="position: absolute; bottom: 12px; left: 14px; font-size: 11px; color: var(--text-muted); background: rgba(0,0,0,0.6); padding: 4px 8px; border-radius: 4px;">
+                            🖱️ Drag with mouse to rotate scaffold | Scroll to zoom
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: CALIBRATION STUDIO -->
+            <div id="tabCalibration" class="tab-content" style="display: none;">
+                <div class="stat-card">
+                    <div class="stat-card-header">
+                        <span class="stat-card-title">🔬 Bioink Rheometer Data Calibration Studio</span>
+                        <span class="stat-pill pill-green">Fit Experimental Sweep</span>
+                    </div>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+                        Upload or paste experimental shear sweep measurements (shear rate vs shear stress or viscosity).
+                        The engine fits both <strong>Ostwald–de Waele</strong> and <strong>Herschel–Bulkley</strong> non-Newtonian models, calculating goodness-of-fit R² and parameter standard errors.
+                    </p>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <div>
+                            <div class="form-group">
+                                <label class="form-label" for="txtCalibData">
+                                    <span>Experimental Data (shear_rate, shear_stress)</span>
+                                    <button class="btn btn-outline" style="padding: 2px 6px; font-size: 10px;" onclick="loadSampleCalibrationData()">Load Sample CSV</button>
+                                </label>
+                                <textarea id="txtCalibData" rows="10" placeholder="0.5, 4.2&#10;1.0, 7.8&#10;5.0, 22.1&#10;10.0, 34.5&#10;25.0, 62.0&#10;50.0, 95.4&#10;100.0, 142.0&#10;250.0, 240.5"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="selCalibType">Second Column Value</label>
+                                <select id="selCalibType">
+                                    <option value="stress">Shear Stress τ (Pa)</option>
+                                    <option value="viscosity">Apparent Viscosity η (Pa·s)</option>
+                                </select>
+                            </div>
+                            <button class="btn btn-primary" onclick="runCalibrationFit()" style="width: 100%;">
+                                ⚡ Fit Non-Newtonian Rheology Model
+                            </button>
+                        </div>
+
+                        <div>
+                            <div id="calibResultsBox" style="background: #0f1624; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 14px; min-height: 220px;">
+                                <div style="font-size: 12px; color: var(--text-muted); text-align: center; margin-top: 60px;">
+                                    Paste data and click "Fit Non-Newtonian Rheology Model" to inspect parameters and parity curves.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="chart-container" style="margin-top: 16px;">
+                        <canvas id="canvasCalib" width="800" height="240" aria-label="Experimental vs Fitted Rheology Curve"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 4: UQ & SENSITIVITY -->
+            <div id="tabUQ" class="tab-content" style="display: none;">
+                <div class="cards-grid">
+                    <!-- UQ CARD -->
+                    <div class="stat-card">
+                        <div class="stat-card-header">
+                            <span class="stat-card-title">🎲 Monte Carlo Uncertainty Quantification</span>
+                            <button class="btn btn-outline" style="padding: 2px 8px; font-size: 11px;" onclick="runUQ()">Run 500 Samples</button>
+                        </div>
+                        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+                            Propagates ±15% variance on K, ±5% on n, ±15% on τ_crit, and ±3% on nozzle diameter.
+                        </p>
+                        <div id="uqResultsContainer">
+                            <div style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 30px;">
+                                Click "Run 500 Samples" to execute Monte Carlo uncertainty propagation.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SENSITIVITY TORNADO CARD -->
+                    <div class="stat-card">
+                        <div class="stat-card-header">
+                            <span class="stat-card-title">🌪️ Parameter Sensitivity (Tornado Plot)</span>
+                            <button class="btn btn-outline" style="padding: 2px 8px; font-size: 11px;" onclick="runSensitivity()">Run OAT Scan</button>
+                        </div>
+                        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+                            One-at-a-Time (OAT) parameter variation (±20%) ranked by impact on Composite Score.
+                        </p>
+                        <div class="chart-container">
+                            <canvas id="canvasTornado" width="400" height="220" aria-label="Tornado Sensitivity Plot"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 5: SIDE-BY-SIDE DIFF -->
+            <div id="tabComparison" class="tab-content" style="display: none;">
+                <div class="stat-card">
+                    <div class="stat-card-header">
+                        <span class="stat-card-title">⚖️ Side-by-Side Formulation Differential</span>
+                        <button class="btn btn-primary" onclick="pinForComparison()">📌 Pin Current Formulation</button>
+                    </div>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+                        Compare the pinned baseline formulation (Formulation A) against your currently edited parameters (Formulation B).
+                    </p>
+                    <div class="table-container">
+                        <table id="tableComparison">
+                            <thead>
+                                <tr>
+                                    <th>Parameter / Metric</th>
+                                    <th>Formulation A (Pinned)</th>
+                                    <th>Formulation B (Current)</th>
+                                    <th>Differential (Δ)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyComparison">
+                                <tr>
+                                    <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 30px;">
+                                        No formulation pinned yet. Click "Pin Current Formulation" to compare.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 6: BENCHMARK PARITY -->
+            <div id="tabBenchmarks" class="tab-content" style="display: none;">
+                <div class="stat-card">
+                    <div class="stat-card-header">
+                        <span class="stat-card-title">📚 Published Literature Benchmark Parity</span>
+                        <span class="stat-pill pill-green">Literature Parity</span>
+                    </div>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+                        Direct comparison between peer-reviewed literature measurements and BioInkSim mathematical predictions across standardized formulations.
+                    </p>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Study & Formulation</th>
+                                    <th>Measured Literature Data</th>
+                                    <th>BioInkSim Predicted</th>
+                                    <th>Relative Agreement</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyBenchmarks">
+                                <tr>
+                                    <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 20px;">
+                                        Loading literature benchmarks...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 7: INVERSE DESIGN AI -->
+            <div id="tabInverse" class="tab-content" style="display: none;">
+                <div class="stat-card">
+                    <div class="stat-card-header">
+                        <span class="stat-card-title">🤖 Inverse Design AI Optimization Studio</span>
+                        <span class="stat-pill pill-purple">Multi-Objective Search</span>
+                    </div>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
+                        Specify target tissue, desired stiffness, and porosity. The AI optimizer searches concentrations, crosslinking conditions, and nozzle kinematics to find the Pareto-optimal recipe.
+                    </p>
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 16px;">
+                        <div class="form-group">
+                            <label class="form-label" for="invTissue">Target Tissue</label>
+                            <select id="invTissue">
+                                <option value="Cartilage">Articular Cartilage</option>
+                                <option value="Bone">Trabecular Bone</option>
+                                <option value="Skin">Dermis / Skin</option>
+                                <option value="Muscle">Skeletal Muscle</option>
+                                <option value="Blood vessel">Vascular Conduit</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="invPorosity">Target Porosity (%)</label>
+                            <input type="text" id="invPorosity" value="70">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="invModulus">Target Young's Modulus (kPa)</label>
+                            <input type="text" id="invModulus" value="180">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="invLayer">Target Layer Height (μm)</label>
+                            <input type="text" id="invLayer" value="250">
+                        </div>
+                    </div>
+
+                    <button class="btn btn-primary" onclick="runInverseDesign()" style="width: 100%; padding: 10px;">
+                        🚀 Compute Optimal Formulation Recipe
+                    </button>
+
+                    <div id="inverseResultBox" style="margin-top: 18px; display: none;"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <noscript>
+        <div style="padding: 20px; background: #991b1b; color: #fff; text-align: center;">
+            JavaScript is required to run the BioInkSim interactive dashboard and 3D viewport.
+        </div>
+    </noscript>
+
+    <script src="/app.js"></script>
+</body>
+</html>
